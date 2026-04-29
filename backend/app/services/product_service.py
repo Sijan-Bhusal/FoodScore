@@ -6,23 +6,29 @@ from sqlalchemy import text
 def create_product(data: dict, db: Session) -> str:
     product_id = str(uuid.uuid4())
     
-    # Convert dict to JSON string for PostgreSQL
-    nutriments_json = json.dumps(data.get("nutriments", {}))
-    additives_list = data.get("additives", [])
+    # Convert additives list to JSONB format
+    additives_json = json.dumps(data.get("additives", []))
+    
+    # Ensure nutriments is properly formatted as JSONB
+    nutriments = data.get("nutriments", {})
+    if isinstance(nutriments, str):
+        nutriments_json = nutriments
+    else:
+        nutriments_json = json.dumps(nutriments)
     
     db.execute(text("""
         INSERT INTO products
         (product_id, name, brand, category, ingredients_raw,
          additives, nutriments, nova_group, nutri_score, barcode)
         VALUES (:pid, :name, :brand, :cat, :ingr,
-                :additives, :nutriments, :nova, :nutri, :barcode)
+                CAST(:additives AS jsonb), CAST(:nutriments AS jsonb), :nova, :nutri, :barcode)
     """), {
         "pid": product_id,
         "name": data.get("name"),
         "brand": data.get("brand"),
         "cat": data.get("category"),
         "ingr": data.get("ingredients_raw"),
-        "additives": additives_list,
+        "additives": additives_json,
         "nutriments": nutriments_json,
         "nova": data.get("nova_group"),
         "nutri": data.get("nutri_score"),
