@@ -1,38 +1,53 @@
-from fastapi import FastAPI
-from app.database import engine, Base, SessionLocal
-
-# import models so SQLAlchemy sees them
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+import traceback
+from pathlib import Path
+from app.database import engine, Base
 from app.models import product, nutrition, score
+from app.api import products, score as score_router, search
 
-app = FastAPI()
+app = FastAPI(title="FoodScore API", version="1.0.0")
 
+# CORS — allows Flutter app to call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SCHEMA_FILE = Path(__file__).resolve().parents[2] / "database" / "schema.sql"
+
+@app.middleware("http")
+async def catch_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "detail": traceback.format_exc()}
+        )
 
 @app.on_event("startup")
-def startup_db_check():
-    try:
-        Base.metadata.create_all(bind=engine)
-        app.state.db_startup_error = None
-    except Exception as e:
-        app.state.db_startup_error = str(e)
+def startup():
+    Base.metadata.create_all(bind=engine)
+    if SCHEMA_FILE.exists():
+        schema_sql = SCHEMA_FILE.read_text(encoding="utf-8")
+        statements = [s.strip() for s in schema_sql.split(";") if s.strip()]
+        with engine.begin() as connection:
+            for statement in statements:
+                connection.exec_driver_sql(statement)
+
+app.include_router(products.router)
+app.include_router(score_router.router)
+app.include_router(search.router)
 
 @app.get("/")
 def home():
-    return {"message": "FoodScore backend running 🚀"}
+    return {"message": "FoodScore API is running"}
 
-@app.get("/test-db")
-def test_db():
-    if getattr(app.state, "db_startup_error", None):
-        return {
-            "status": "DB not ready ❌",
-            "error": app.state.db_startup_error,
-        }
-
-    db = None
-    try:
-        db = SessionLocal()
-        return {"status": "DB connected ✅"}
-    except Exception as e:
-        return {"error": str(e)}
-    finally:
-        if db:
-            db.close()
+@app.get("/health")
+def health():
+    return {"status": "ok"}
