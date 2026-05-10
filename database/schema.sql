@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(200) NOT NULL,
     brand VARCHAR(100),
     category VARCHAR(50),
-    barcode VARCHAR(50) UNIQUE,
+    barcode VARCHAR(50) UNIQUE NOT NULL,
     image_url TEXT,
     ingredients_raw TEXT,
     additives JSONB DEFAULT '[]'::jsonb,

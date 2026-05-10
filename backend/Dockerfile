@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir -r requirements-production.txt
 # Copy application code
 COPY . .
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Create non-root user and log directory
+RUN useradd -m -u 1000 appuser && mkdir -p /var/log/foodscore && chown -R appuser:appuser /app /var/log/foodscore
 USER appuser
 
 EXPOSE 8000
