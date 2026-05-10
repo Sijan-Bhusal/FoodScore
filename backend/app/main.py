@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 from pathlib import Path
-from app.database import engine, Base
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.database import engine, Base, get_db
 from app.models import product, nutrition, score
 from app.api import products, score as score_router, search
 
@@ -49,5 +51,22 @@ def home():
     return {"message": "FoodScore API is running"}
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health_check(db: Session = Depends(get_db)):
+    """Health check endpoint for monitoring and container orchestration"""
+    try:
+        # Verify database connection
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "healthy",
+            "service": "FoodScore API",
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "service": "FoodScore API",
+                "error": str(e)
+            }
+        )

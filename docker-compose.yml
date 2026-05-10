@@ -5,20 +5,29 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: foodscore_db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: foodscore
-      POSTGRES_PASSWORD: foodscore_dev_password
-      POSTGRES_DB: foodscore
+      POSTGRES_USER: ${DB_USER:-foodscore}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-foodscore_dev_password}
+      POSTGRES_DB: ${DB_NAME:-foodscore}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U foodscore" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-foodscore}" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     networks:
       - foodscore_network
 
@@ -28,9 +37,12 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: foodscore_backend
+    restart: on-failure
     environment:
-      DATABASE_URL: postgresql://foodscore:foodscore_dev_password@postgres:5432/foodscore
+      DATABASE_URL: postgresql://${DB_USER:-foodscore}:${DB_PASSWORD:-foodscore_dev_password}@postgres:5432/${DB_NAME:-foodscore}
       PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     depends_on:
@@ -38,6 +50,20 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - backend_logs:/var/log/foodscore
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     command: >
       sh -c "pip install -r requirements.txt &&
              python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -50,4 +76,6 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  backend_logs:
     driver: local

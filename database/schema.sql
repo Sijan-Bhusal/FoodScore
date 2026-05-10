@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(200) NOT NULL,
     brand VARCHAR(100),
     category VARCHAR(50),
-    barcode VARCHAR(50) UNIQUE,
+    barcode VARCHAR(50) UNIQUE NOT NULL,
     ingredients_raw TEXT,
     additives JSONB DEFAULT '[]'::jsonb,
     nutriments JSONB DEFAULT '{}'::jsonb,
@@ -24,6 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
 CREATE INDEX IF NOT EXISTS idx_products_health_score ON products(health_score);
+CREATE INDEX IF NOT EXISTS idx_products_additives ON products USING GIN (additives);
 
 -- Additive reference table
 CREATE TABLE IF NOT EXISTS additive_reference (
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS flagged_ingredients (
     id SERIAL PRIMARY KEY,
     product_id UUID REFERENCES products(product_id) ON DELETE CASCADE,
     ingredient_name VARCHAR(200),
-    e_number VARCHAR(10) REFERENCES additive_reference(e_number),
+    e_number VARCHAR(10) REFERENCES additive_reference(e_number) ON DELETE SET NULL,
     risk_tier VARCHAR(20),
     penalty INTEGER
 );
@@ -69,8 +70,24 @@ CREATE TABLE IF NOT EXISTS scan_history (
     product_id UUID REFERENCES products(product_id),
     barcode VARCHAR(50),
     scanned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    score_at_scan INTEGER
+    score_at_scan INTEGER,
+    CHECK ((product_id IS NOT NULL AND barcode IS NULL) OR (product_id IS NULL AND barcode IS NOT NULL))
 );
+
+-- Auto-update timestamp trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_products_updated_at ON products;
+CREATE TRIGGER update_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- Seed initial additive data
 INSERT INTO additive_reference (e_number, common_name, risk_tier, is_banned) VALUES
