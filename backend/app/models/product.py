@@ -11,6 +11,7 @@ class Product(Base):
     name = Column(String, nullable=False)
     brand = Column(String)
     category = Column(String)
+    image_url = Column(String)
     ingredients_raw = Column(String)
     additives = Column(JSON, default=[])
     nutriments = Column(JSON, default={})

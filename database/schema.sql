@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
     brand VARCHAR(100),
     category VARCHAR(50),
     barcode VARCHAR(50) UNIQUE,
+    image_url TEXT,
     ingredients_raw TEXT,
     additives JSONB DEFAULT '[]'::jsonb,
     nutriments JSONB DEFAULT '{}'::jsonb,
@@ -18,6 +19,8 @@ CREATE TABLE IF NOT EXISTS products (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- Create indexes separately
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);

@@ -18,15 +18,16 @@ def create_product(data: dict, db: Session) -> str:
     
     db.execute(text("""
         INSERT INTO products
-        (product_id, name, brand, category, ingredients_raw,
+        (product_id, name, brand, category, image_url, ingredients_raw,
          additives, nutriments, nova_group, nutri_score, barcode)
-        VALUES (:pid, :name, :brand, :cat, :ingr,
+        VALUES (:pid, :name, :brand, :cat, :image_url, :ingr,
                 CAST(:additives AS jsonb), CAST(:nutriments AS jsonb), :nova, :nutri, :barcode)
     """), {
         "pid": product_id,
         "name": data.get("name"),
         "brand": data.get("brand"),
         "cat": data.get("category"),
+        "image_url": data.get("image_url"),
         "ingr": data.get("ingredients_raw"),
         "additives": additives_json,
         "nutriments": nutriments_json,
@@ -39,7 +40,7 @@ def create_product(data: dict, db: Session) -> str:
 
 def get_product(product_id: str, db: Session):
     return db.execute(text("""
-        SELECT p.product_id, p.name, p.brand, p.category,
+        SELECT p.product_id, p.name, p.brand, p.category, p.image_url,
                p.health_score, p.is_harmful, p.nova_group,
                p.nutri_score, p.nutriments, p.additives,
                s.suggestion_text,

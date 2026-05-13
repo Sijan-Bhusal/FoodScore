@@ -32,24 +32,42 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Product not found")
     return {
         "product_id": row[0], "name": row[1], "brand": row[2],
-        "category": row[3], "health_score": row[4], "is_harmful": row[5],
-        "nova_group": row[6], "nutri_score": row[7], "nutriments": row[8],
-        "additives": row[9], "suggestion": row[10],
-        "flagged_ingredients": row[11],
-        "traffic_light": score_service.get_traffic_light(row[4] or 0, row[5] or False)
+        "category": row[3], "image_url": row[4],
+        "health_score": row[5], "is_harmful": row[6],
+        "nova_group": row[7], "nutri_score": row[8], "nutriments": row[9],
+        "additives": row[10], "suggestion": row[11],
+        "flagged_ingredients": row[12],
+        "traffic_light": score_service.get_traffic_light(row[5] or 0, row[6] or False)
     }
 
 @router.get("/scan/{barcode}")
-async def scan_barcode_endpoint(
-    barcode: str, 
-    db: Session = Depends(get_db)
-):
+async def scan_barcode_endpoint(barcode: str, db: Session = Depends(get_db)):
     """Scan a product by barcode - checks local DB first, then OpenFoodFacts"""
     from app.services.openfoodfacts import scan_barcode
     
-    result = await scan_barcode(barcode, db)
+    try:
+        result = await scan_barcode(barcode, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error scanning barcode: {str(e)}")
     
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     
-    return result
+    product_id = result.get("product_id")
+    if not product_id:
+        return result
+
+    row = product_service.get_product(product_id, db)
+    if not row:
+        return result
+
+    return {
+        "source": result.get("source"),
+        "product_id": row[0], "name": row[1], "brand": row[2],
+        "category": row[3], "image_url": row[4],
+        "health_score": row[5], "is_harmful": row[6],
+        "nova_group": row[7], "nutri_score": row[8], "nutriments": row[9],
+        "additives": row[10], "suggestion": row[11],
+        "flagged_ingredients": row[12],
+        "traffic_light": score_service.get_traffic_light(row[5] or 0, row[6] or False)
+    }
