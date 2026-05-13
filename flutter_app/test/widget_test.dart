@@ -8,6 +8,6 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: FoodScoreApp()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Food Score'), findsOneWidget);
+    expect(find.text('Open Food Facts'), findsOneWidget);
   });
 }

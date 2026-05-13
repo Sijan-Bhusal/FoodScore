@@ -1,3 +1,4 @@
+import 'additive_flag.dart';
 import 'nutrition_facts.dart';
 
 class Product {
@@ -13,6 +14,12 @@ class Product {
     required this.insights,
     required this.barcode,
     required this.nutrition,
+    this.category,
+    this.additives = const <String>[],
+    this.flaggedIngredients = const <AdditiveFlag>[],
+    this.isHarmful = false,
+    this.trafficLabel,
+    this.source,
   });
 
   final String id;
@@ -26,6 +33,12 @@ class Product {
   final List<String> insights;
   final String barcode;
   final NutritionFacts nutrition;
+  final String? category;
+  final List<String> additives;
+  final List<AdditiveFlag> flaggedIngredients;
+  final bool isHarmful;
+  final String? trafficLabel;
+  final String? source;
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
@@ -42,6 +55,18 @@ class Product {
       nutrition: NutritionFacts.fromJson(
         json['nutrition'] as Map<String, dynamic>,
       ),
+      category: json['category'] as String?,
+      additives: (json['additives'] as List<dynamic>? ?? <dynamic>[])
+          .map((item) => item.toString())
+          .toList(),
+      flaggedIngredients:
+          (json['flaggedIngredients'] as List<dynamic>? ?? <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .map(AdditiveFlag.fromJson)
+              .toList(),
+      isHarmful: json['isHarmful'] as bool? ?? false,
+      trafficLabel: json['trafficLabel'] as String?,
+      source: json['source'] as String?,
     );
   }
 
@@ -58,6 +83,14 @@ class Product {
       'insights': insights,
       'barcode': barcode,
       'nutrition': nutrition.toJson(),
+      'category': category,
+      'additives': additives,
+      'flaggedIngredients': flaggedIngredients
+          .map((item) => item.toJson())
+          .toList(),
+      'isHarmful': isHarmful,
+      'trafficLabel': trafficLabel,
+      'source': source,
     };
   }
 }

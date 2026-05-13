@@ -19,14 +19,14 @@ class ProductHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(AppColors.radiusMedium),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppColors.radiusMedium),
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppColors.radiusMedium),
             border: Border.all(
               color: AppColors.outlineVariant.withValues(alpha: 0.55),
             ),
@@ -34,7 +34,7 @@ class ProductHistoryCard extends StatelessWidget {
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppColors.radiusSmall),
                 child: Image.network(
                   product.imageUrl,
                   width: 72,
@@ -57,7 +57,7 @@ class ProductHistoryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      product.subtitle,
+                      '${product.subtitle} • Score ${product.score}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -100,6 +100,8 @@ class ProductHistoryCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              _ScorePill(score: product.score),
             ],
           ),
         ),
@@ -110,28 +112,28 @@ class ProductHistoryCard extends StatelessWidget {
   Color _nutriColor(String value) {
     switch (value.toUpperCase()) {
       case 'A':
-        return const Color(0xFF038141);
+        return AppColors.success;
       case 'B':
-        return const Color(0xFF85BB2F);
+        return AppColors.good;
       case 'C':
-        return const Color(0xFFFECB02);
+        return AppColors.moderate;
       case 'D':
-        return const Color(0xFFEE8100);
+        return AppColors.fair;
       default:
-        return const Color(0xFFE63E11);
+        return AppColors.poor;
     }
   }
 
   Color _novaColor(int value) {
     switch (value) {
       case 1:
-        return const Color(0xFF00A651);
+        return AppColors.success;
       case 2:
-        return const Color(0xFFFDB913);
+        return AppColors.good;
       case 3:
-        return const Color(0xFFF37021);
+        return AppColors.moderate;
       default:
-        return const Color(0xFFED1C24);
+        return AppColors.poor;
     }
   }
 
@@ -154,15 +156,50 @@ class ProductHistoryCard extends StatelessWidget {
     switch (value.toUpperCase()) {
       case 'A':
       case 'B':
-        return const Color(0xFF1F6A3B);
+        return AppColors.additiveLow;
       case 'C':
-        return const Color(0xFF7A5A13);
+        return AppColors.additiveMedium;
       case 'D':
       case 'E':
-        return const Color(0xFF9A3513);
+        return AppColors.additiveHigh;
       default:
         return AppColors.onSurface;
     }
+  }
+}
+
+class _ScorePill extends StatelessWidget {
+  const _ScorePill({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _scoreColor(score);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        score.toString(),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Color _scoreColor(int value) {
+    if (value <= 40) {
+      return AppColors.fair;
+    }
+    if (value <= 70) {
+      return AppColors.moderate;
+    }
+    return AppColors.success;
   }
 }
 

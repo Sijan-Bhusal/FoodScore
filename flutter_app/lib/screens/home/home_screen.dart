@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../app/app_shell.dart';
+import '../../app/navigation/app_router.dart';
 import '../../app/tokens.dart';
 import '../../models/product.dart';
-import '../../state/home_providers.dart';
+import '../../models/scan_record.dart';
+import '../../providers/scan_history_provider.dart';
+import '../../services/search_service.dart';
+import '../contribution/contribute_barcode_upload_screen.dart';
+import '../product/product_detail_screen.dart';
 import '../scanner/scanner_screen.dart';
-import '../shared/product_history_card.dart';
+import '../search/search_results_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -19,10 +23,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-
-  List<Product> _searchResults = const <Product>[];
+  List<Product> _searchResults = [];
   bool _isSearching = false;
-  bool _hasSearched = false;
+  String _searchError = '';
+  String _lastQuery = '';
 
   @override
   void dispose() {
@@ -31,31 +35,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _runSearch() async {
-    final query = _searchController.text.trim();
-    if (query.isEmpty) {
+  Future<void> _startScan() async {
+    if (await Permission.camera.request().isGranted) {
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ScannerScreen()));
+    }
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.trim().isEmpty) {
       setState(() {
-        _searchResults = const <Product>[];
-        _hasSearched = false;
-        _isSearching = false;
+        _searchResults = [];
+        _searchError = '';
       });
       return;
     }
 
     setState(() {
       _isSearching = true;
-      _hasSearched = true;
+      _searchError = '';
+      _lastQuery = query.trim();
     });
 
     try {
-      final results = await ref
-          .read(productRepositoryProvider)
-          .searchProducts(query);
-      if (!mounted) {
-        return;
-      }
+      final results = await SearchService().searchProducts(query.trim());
+      if (!mounted) return;
       setState(() {
         _searchResults = results;
+      });
+      if (results.isEmpty) {
+        _showContributeSheet(query.trim());
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _searchError = 'Search failed. Try again.';
       });
     } finally {
       if (mounted) {
@@ -66,225 +82,369 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<void> _selectSearchResult(Product product) async {
-    await ref.read(scanHistoryProvider.notifier).addScan(product);
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added ${product.name} to history.')),
+  Future<void> _openProductDetails(Product product) async {
+    await ref
+        .read(scanHistoryProvider.notifier)
+        .addRecord(ScanRecord(product: product, scannedAt: DateTime.now()));
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final historyAsync = ref.watch(scanHistoryProvider);
-
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: _TopBar(),
+  void _showContributeSheet(String query) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: AppColors.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No results for "$query"',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Help us grow the database by contributing this product.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.onSurfaceVariant,
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: _SearchBar(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  isSearching: _isSearching,
-                  onSubmitted: (_) => _runSearch(),
-                  onSearchTap: _runSearch,
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ContributeBarcodeUploadScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('Contribute Product'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
                 ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: _SearchResultsSection(
-                hasSearched: _hasSearched,
-                isSearching: _isSearching,
-                results: _searchResults,
-                onSelectProduct: _selectSearchResult,
-                onContributeTap: () => _startScan(context, ref),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: const Padding(
-                padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: _CategoriesRow(),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-                child: _ScanCard(onTap: () => _startScan(context, ref)),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 26, 20, 12),
-                child: _SectionHeader(
-                  onClear: () async {
-                    await ref.read(scanHistoryProvider.notifier).clear();
-                  },
-                  onViewHistory: () {
-                    ref.read(navIndexProvider.notifier).state = 1;
-                  },
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: historyAsync.when(
-                  data: (history) {
-                    return _RecentList(items: history);
-                  },
-                  loading: () => const _RecentListSkeleton(),
-                  error: (_, _) => const _RecentListSkeleton(),
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 150)),
           ],
         ),
       ),
     );
   }
 
-  static Future<void> _startScan(BuildContext context, WidgetRef ref) async {
-    var status = await Permission.camera.status;
-    if (status.isPermanentlyDenied) {
-      await openAppSettings();
-      return;
-    }
+  @override
+  Widget build(BuildContext context) {
+    final history = ref.watch(scanHistoryProvider);
+    final recentScans = history.take(4).toList();
 
-    if (!status.isGranted) {
-      status = await Permission.camera.request();
-      if (status.isPermanentlyDenied) {
-        await openAppSettings();
-        return;
-      }
-      if (!status.isGranted) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Camera permission is required to scan products.'),
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ContributeBarcodeUploadScreen(),
             ),
           );
-        }
-        return;
-      }
-    }
-
-    final product = await Navigator.of(
-      context,
-    ).push<Product>(MaterialPageRoute(builder: (_) => const ScannerScreen()));
-    if (product == null || !context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added ${product.name} to history.')),
+        },
+        backgroundColor: AppColors.primaryContainer,
+        foregroundColor: AppColors.onPrimary,
+        child: const Icon(Icons.add_rounded),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          children: [
+            _HeaderBar(
+              onProfileTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile coming soon.')),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _HeroScanCard(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              isSearching: _isSearching,
+              onSearch: _performSearch,
+              onScan: _startScan,
+            ),
+            if (_searchError.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                _searchError,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.error),
+              ),
+            ],
+            if (_searchResults.isNotEmpty || _isSearching) ...[
+              const SizedBox(height: 16),
+              _SearchResultsSection(
+                isSearching: _isSearching,
+                results: _searchResults,
+                onSelect: _openProductDetails,
+                onViewAll: _searchResults.length > 3
+                    ? () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SearchResultsScreen(
+                              query: _lastQuery,
+                              results: _searchResults,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
+                onContribute: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ContributeBarcodeUploadScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 20),
+            _SectionHeader(
+              title: 'Recent Scans',
+              actionLabel: 'View All',
+              onAction: () {
+                AppRouter.goToHistory(context);
+              },
+            ),
+            const SizedBox(height: 12),
+            if (recentScans.isEmpty)
+              _EmptyStateCard(
+                title: 'Nothing scanned yet',
+                subtitle: 'Scan your first product to see scores here.',
+                onPressed: _startScan,
+              )
+            else
+              Column(
+                children: [
+                  for (final record in recentScans)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _RecentScanCard(
+                        record: record,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ProductDetailScreen(product: record.product),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _HeaderBar extends StatelessWidget {
+  const _HeaderBar({required this.onProfileTap});
+
+  final VoidCallback onProfileTap;
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.menu),
-          color: AppColors.onSurface,
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.primaryContainer.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.eco, color: AppColors.primary),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            'Open Food Facts',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'FoodScore',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                'Health analysis made simple',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.person_outline),
-          color: AppColors.onSurface,
+        InkWell(
+          onTap: onProfileTap,
+          borderRadius: BorderRadius.circular(24),
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: AppColors.surfaceContainer,
+            child: const Icon(Icons.person_outline, color: AppColors.onSurface),
+          ),
         ),
       ],
     );
   }
 }
 
-class _SearchBar extends StatelessWidget {
-  const _SearchBar({
+class _HeroScanCard extends StatelessWidget {
+  const _HeroScanCard({
     required this.controller,
     required this.focusNode,
     required this.isSearching,
-    required this.onSubmitted,
-    required this.onSearchTap,
+    required this.onSearch,
+    required this.onScan,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool isSearching;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onSearchTap;
+  final ValueChanged<String> onSearch;
+  final VoidCallback onScan;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(
-              Icons.search,
-              color: AppColors.onSurface.withValues(alpha: 0.7),
-            ),
-            onPressed: onSearchTap,
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              textInputAction: TextInputAction.search,
-              onSubmitted: onSubmitted,
-              decoration: InputDecoration(
-                hintText: 'Search for products, brands...',
-                border: InputBorder.none,
-                isDense: true,
-                hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.onSurface.withValues(alpha: 0.65),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Search or scan to get a score',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            focusNode: focusNode,
+            textInputAction: TextInputAction.search,
+            onSubmitted: onSearch,
+            decoration: InputDecoration(
+              hintText: 'Search for a product',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: isSearching
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : (controller.text.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              controller.clear();
+                              onSearch('');
+                            },
+                            icon: const Icon(Icons.close),
+                          )
+                        : null),
+              filled: true,
+              fillColor: AppColors.surfaceContainer,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: Divider(color: AppColors.outlineVariant)),
+              const SizedBox(width: 12),
+              Text(
+                'OR',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Divider(color: AppColors.outlineVariant)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Align(
+            alignment: Alignment.center,
+            child: InkWell(
+              onTap: onScan,
+              borderRadius: BorderRadius.circular(48),
+              child: Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primaryContainer,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner,
+                  color: AppColors.onPrimary,
+                  size: 40,
                 ),
               ),
             ),
           ),
-          if (isSearching)
-            const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            Icon(
-              Icons.qr_code_scanner,
-              color: AppColors.onSurface.withValues(alpha: 0.8),
-            ),
-          const SizedBox(width: 8),
+          const SizedBox(height: 12),
+          Text(
+            'Scan a Product',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          Text(
+            'Point your camera at a barcode',
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+          ),
         ],
       ),
     );
@@ -293,280 +453,322 @@ class _SearchBar extends StatelessWidget {
 
 class _SearchResultsSection extends StatelessWidget {
   const _SearchResultsSection({
-    required this.hasSearched,
     required this.isSearching,
     required this.results,
-    required this.onSelectProduct,
-    required this.onContributeTap,
+    required this.onSelect,
+    this.onViewAll,
+    required this.onContribute,
   });
 
-  final bool hasSearched;
   final bool isSearching;
   final List<Product> results;
-  final Future<void> Function(Product product) onSelectProduct;
-  final VoidCallback onContributeTap;
+  final ValueChanged<Product> onSelect;
+  final VoidCallback? onViewAll;
+  final VoidCallback onContribute;
 
   @override
   Widget build(BuildContext context) {
-    if (!hasSearched) {
-      return const SizedBox.shrink();
-    }
-
     if (isSearching) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
-        child: LinearProgressIndicator(),
-      );
-    }
-
-    if (results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.outlineVariant),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Product not found',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Help improve OpenFoodFacts by contributing this product through barcode scan.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed: onContributeTap,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Contribute Product'),
-              ),
-            ],
-          ),
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(20),
         ),
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < results.length; i++) ...[
-            ProductHistoryCard(
-              product: results[i],
-              onTap: () => onSelectProduct(results[i]),
-            ),
-            if (i != results.length - 1) const SizedBox(height: 12),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoriesRow extends StatelessWidget {
-  const _CategoriesRow();
-
-  @override
-  Widget build(BuildContext context) {
-    const labels = ['All', 'Beverages', 'Snacks', 'Dairy', 'Breakfast'];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Padding(
-              padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: i == 0
-                      ? AppColors.secondaryContainer
-                      : AppColors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  labels[i],
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w500,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScanCard extends StatelessWidget {
-  const _ScanCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primaryContainer,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
-          child: Column(
+          Row(
             children: [
-              Container(
-                width: 86,
-                height: 86,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner,
-                  size: 44,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 18),
               Text(
-                'Scan a product',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+                'Results',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Get Nutri-Score, Nova group and Eco-Score',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
+              const Spacer(),
+              if (onViewAll != null)
+                TextButton(onPressed: onViewAll, child: const Text('View All')),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          if (results.isEmpty)
+            _EmptySearchCard(onContribute: onContribute)
+          else
+            Column(
+              children: [
+                for (final product in results.take(3))
+                  ListTile(
+                    onTap: () => onSelect(product),
+                    contentPadding: EdgeInsets.zero,
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        product.imageUrl,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 52,
+                          height: 52,
+                          color: AppColors.surfaceContainer,
+                          child: const Icon(Icons.image_not_supported),
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      product.name,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      product.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptySearchCard extends StatelessWidget {
+  const _EmptySearchCard({required this.onContribute});
+
+  final VoidCallback onContribute;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No products found.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Add this product to help everyone find it next time.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onContribute,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('Contribute Product'),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.onClear, required this.onViewHistory});
+  const _SectionHeader({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+  });
 
-  final Future<void> Function() onClear;
-  final VoidCallback onViewHistory;
+  final String title;
+  final String actionLabel;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: Text(
-            'Recently Scanned',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        TextButton(
-          onPressed: onViewHistory,
-          child: Text(
-            'VIEW HISTORY',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: onClear,
-          child: Text(
-            'CLEAR',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RecentList extends StatelessWidget {
-  const _RecentList({required this.items});
-
-  final List<Product> items;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.outlineVariant),
-        ),
-        child: Text(
-          'No scans yet. Start by scanning your first product.',
+        Text(
+          title,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant),
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
-      );
-    }
-
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++) ...[
-          ProductHistoryCard(product: items[i]),
-          if (i != items.length - 1) const SizedBox(height: 14),
-        ],
+        const Spacer(),
+        TextButton(onPressed: onAction, child: Text(actionLabel)),
       ],
     );
   }
 }
 
-class _RecentListSkeleton extends StatelessWidget {
-  const _RecentListSkeleton();
+class _RecentScanCard extends StatelessWidget {
+  const _RecentScanCard({required this.record, required this.onTap});
+
+  final ScanRecord record;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(
-        3,
-        (_) => Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Container(
-            height: 104,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(24),
+    final score = record.product.score;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.network(
+                record.product.imageUrl,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 64,
+                  height: 64,
+                  color: AppColors.surfaceContainer,
+                  child: const Icon(Icons.image_not_supported),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.product.name,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    record.product.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    record.product.category ?? 'General',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _ScoreRing(score: score, size: 44),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({
+    required this.title,
+    required this.subtitle,
+    required this.onPressed,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan Now'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreRing extends StatelessWidget {
+  const _ScoreRing({required this.score, this.size = 40});
+
+  final int score;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = score >= 80
+        ? AppColors.good
+        : (score >= 50 ? AppColors.moderate : AppColors.error);
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          width: size,
+          height: size,
+          child: CircularProgressIndicator(
+            value: score / 100,
+            strokeWidth: 5,
+            backgroundColor: AppColors.surfaceContainerHighest,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+        Text(
+          score.toString(),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }

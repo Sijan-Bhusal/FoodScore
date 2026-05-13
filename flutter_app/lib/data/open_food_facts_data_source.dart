@@ -37,15 +37,15 @@ class OpenFoodFactsDataSource {
   }
 
   Future<List<Product>> searchProducts(String query, {int limit = 12}) async {
-    final uri = Uri.parse(
-      _searchUrl,
-    ).replace(queryParameters: <String, String>{
-      'search_terms': query,
-      'search_simple': '1',
-      'action': 'process',
-      'json': '1',
-      'page_size': '$limit',
-    });
+    final uri = Uri.parse(_searchUrl).replace(
+      queryParameters: <String, String>{
+        'search_terms': query,
+        'search_simple': '1',
+        'action': 'process',
+        'json': '1',
+        'page_size': '$limit',
+      },
+    );
 
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
@@ -66,8 +66,7 @@ class OpenFoodFactsDataSource {
     Map<String, dynamic> productJson, {
     String? fallbackBarcode,
   }) {
-    final barcode =
-        (productJson['code'] as String?)?.trim().isNotEmpty == true
+    final barcode = (productJson['code'] as String?)?.trim().isNotEmpty == true
         ? (productJson['code'] as String).trim()
         : (fallbackBarcode ?? '').trim();
 
@@ -76,8 +75,7 @@ class OpenFoodFactsDataSource {
         ? (productJson['product_name'] as String).trim()
         : 'Unknown Product';
 
-    final brands =
-        (productJson['brands'] as String?)?.trim().isNotEmpty == true
+    final brands = (productJson['brands'] as String?)?.trim().isNotEmpty == true
         ? (productJson['brands'] as String).trim()
         : 'OpenFoodFacts';
 
@@ -86,9 +84,19 @@ class OpenFoodFactsDataSource {
             true
         ? (productJson['image_front_small_url'] as String).trim()
         : ((productJson['image_front_url'] as String?)?.trim().isNotEmpty ==
-              true
-          ? (productJson['image_front_url'] as String).trim()
-          : 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=800&q=80');
+                  true
+              ? (productJson['image_front_url'] as String).trim()
+              : 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=800&q=80');
+
+    final category = (productJson['categories'] as String?)
+        ?.split(',')
+        .first
+        .trim();
+
+    final additives =
+        (productJson['additives_tags'] as List<dynamic>? ?? <dynamic>[])
+            .map((item) => item.toString().replaceAll('en:', '').toUpperCase())
+            .toList();
 
     final nutriments =
         productJson['nutriments'] as Map<String, dynamic>? ??
@@ -104,8 +112,8 @@ class OpenFoodFactsDataSource {
     final nutriScore = ((productJson['nutriscore_grade'] as String?) ?? 'c')
         .toUpperCase();
     final novaGroup = _numToInt(productJson['nova_group']).clamp(1, 4);
-    final ecoScore =
-        ((productJson['ecoscore_grade'] as String?) ?? 'c').toUpperCase();
+    final ecoScore = ((productJson['ecoscore_grade'] as String?) ?? 'c')
+        .toUpperCase();
 
     final score = _calculateCompositeScore(
       nutriScore: nutriScore,
@@ -133,6 +141,10 @@ class OpenFoodFactsDataSource {
       ),
       barcode: barcode,
       nutrition: nutrition,
+      category: category?.isEmpty == true ? null : category,
+      additives: additives,
+      trafficLabel: _trafficLabel(score),
+      source: 'openfoodfacts',
     );
   }
 
@@ -213,5 +225,18 @@ class OpenFoodFactsDataSource {
     }
 
     return insights.take(3).toList();
+  }
+
+  String _trafficLabel(int score) {
+    if (score == 0) {
+      return 'Harmful — avoid';
+    }
+    if (score <= 40) {
+      return 'Poor';
+    }
+    if (score <= 70) {
+      return 'Moderate';
+    }
+    return 'Good';
   }
 }

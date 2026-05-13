@@ -1,26 +1,25 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'navigation.dart';
 
 import '../screens/home/home_screen.dart';
 import '../screens/placeholders/history_screen.dart';
 import '../screens/placeholders/settings_screen.dart';
 import 'tokens.dart';
 
-final navIndexProvider = StateProvider<int>((ref) => 0);
-
 class AppShell extends ConsumerWidget {
   const AppShell({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentIndex = ref.watch(navIndexProvider);
-
     final screens = const [HomeScreen(), HistoryScreen(), SettingsScreen()];
 
     return Scaffold(
-      body: IndexedStack(index: currentIndex, children: screens),
+      body: ValueListenableBuilder<int>(
+        valueListenable: navIndex,
+        builder: (context, index, _) =>
+            IndexedStack(index: index, children: screens),
+      ),
       bottomNavigationBar: const _BottomNavBar(),
     );
   }
@@ -31,48 +30,42 @@ class _BottomNavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentIndex = ref.watch(navIndexProvider);
-
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest.withValues(alpha: 0.8),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.onSurface.withValues(alpha: 0.06),
-                blurRadius: 32,
-                offset: const Offset(0, -12),
-              ),
-            ],
+    final currentIndex = navIndex.value;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.onSurface.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, -6),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                label: 'Home',
-                icon: Icons.home,
-                isActive: currentIndex == 0,
-                onTap: () => ref.read(navIndexProvider.notifier).state = 0,
-              ),
-              _NavItem(
-                label: 'History',
-                icon: Icons.history,
-                isActive: currentIndex == 1,
-                onTap: () => ref.read(navIndexProvider.notifier).state = 1,
-              ),
-              _NavItem(
-                label: 'Settings',
-                icon: Icons.settings,
-                isActive: currentIndex == 2,
-                onTap: () => ref.read(navIndexProvider.notifier).state = 2,
-              ),
-            ],
+        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavItem(
+            label: 'Home',
+            icon: Icons.home,
+            isActive: currentIndex == 0,
+            onTap: () => navIndex.value = 0,
           ),
-        ),
+          _NavItem(
+            label: 'History',
+            icon: Icons.history,
+            isActive: currentIndex == 1,
+            onTap: () => navIndex.value = 1,
+          ),
+          _NavItem(
+            label: 'Settings',
+            icon: Icons.settings,
+            isActive: currentIndex == 2,
+            onTap: () => navIndex.value = 2,
+          ),
+        ],
       ),
     );
   }
@@ -93,33 +86,33 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? AppColors.primary : AppColors.onSurfaceVariant;
+    final color = isActive ? AppColors.onPrimary : AppColors.onSurfaceVariant;
     final background = isActive
-        ? AppColors.primaryFixed.withValues(alpha: 0.7)
+        ? AppColors.primaryContainer
         : Colors.transparent;
-
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: color),
-            const SizedBox(height: 4),
-            Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.6,
-                color: color,
+            if (isActive) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
