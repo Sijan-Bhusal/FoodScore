@@ -41,7 +41,7 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-foodscore}:${DB_PASSWORD:-foodscore_dev_password}@postgres:5432/${DB_NAME:-foodscore}
       PYTHONUNBUFFERED: 1
     env_file:
-      - .env
+      - ./backend/.env
     ports:
       - "8000:8000"
     depends_on:
