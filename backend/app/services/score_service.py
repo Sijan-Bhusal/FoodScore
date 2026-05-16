@@ -62,7 +62,7 @@ def compute_score(product_id: str, db: Session) -> dict:
     
     # Check nutriments if not already harmful
     if not is_harmful and nutriments:
-        nut_data = nutriments if isinstance(nutriments, dict) else json.loads(nutriments)
+        nut_data = nutriments or {}
         for field, high, medium, penalty in NUTRIMENT_RULES:
             value = nut_data.get(field, 0) or 0
             if penalty > 0:

@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.database import engine, Base, get_db
 from app.models import product, nutrition, score
 from app.api import products, score as score_router, search
-
+from app.api import auth,scan
 app = FastAPI(title="FoodScore API", version="1.0.0")
 
 # CORS — allows Flutter app to call this API
@@ -70,3 +70,6 @@ def health_check(db: Session = Depends(get_db)):
                 "error": str(e)
             }
         )
+    
+app.include_router(auth.router)
+app.include_router(scan.router)

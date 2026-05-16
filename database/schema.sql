@@ -110,3 +110,37 @@ INSERT INTO additive_reference (e_number, common_name, risk_tier, is_banned) VAL
 ('E954', 'Saccharin', 'medium', false),
 ('E955', 'Sucralose', 'low', false)
 ON CONFLICT (e_number) DO NOTHING;
+-- Extend users table (add missing columns)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(200);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- User settings table
+CREATE TABLE IF NOT EXISTS user_settings (
+    setting_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
+    theme VARCHAR(20) DEFAULT 'light',
+    notifications BOOLEAN DEFAULT TRUE,
+    language VARCHAR(10) DEFAULT 'en',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id)
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_scan_history_user ON scan_history(user_id, scanned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scan_history_product ON scan_history(product_id);
+CREATE INDEX IF NOT EXISTS idx_scan_history_barcode ON scan_history(barcode);
+CREATE INDEX IF NOT EXISTS idx_scan_history_scanned_at ON scan_history(scanned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scan_history_score ON scan_history(score_at_scan);
+
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+ALTER TABLE users ADD CONSTRAINT valid_email CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+
+CREATE INDEX IF NOT EXISTS idx_products_healthy ON products(health_score DESC) WHERE health_score >= 70;
