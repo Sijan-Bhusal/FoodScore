@@ -6,12 +6,11 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import engine, Base, get_db
-from app.models import product, nutrition, score
-from app.api import products, score as score_router, search
+from app.models import product, nutrition, score, user
+from app.api import products, score as score_router, search, auth
 
 app = FastAPI(title="FoodScore API", version="1.0.0")
 
-# CORS — allows Flutter app to call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,6 +20,7 @@ app.add_middleware(
 )
 
 SCHEMA_FILE = Path(__file__).resolve().parents[2] / "database" / "schema.sql"
+
 
 @app.middleware("http")
 async def catch_exceptions(request: Request, call_next):
@@ -32,6 +32,7 @@ async def catch_exceptions(request: Request, call_next):
             content={"error": str(e), "detail": traceback.format_exc()}
         )
 
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -42,19 +43,22 @@ def startup():
             for statement in statements:
                 connection.exec_driver_sql(statement)
 
+
+app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(score_router.router)
 app.include_router(search.router)
+
 
 @app.get("/")
 def home():
     return {"message": "FoodScore API is running"}
 
+
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
     """Health check endpoint for monitoring and container orchestration"""
     try:
-        # Verify database connection
         db.execute(text("SELECT 1"))
         return {
             "status": "healthy",
