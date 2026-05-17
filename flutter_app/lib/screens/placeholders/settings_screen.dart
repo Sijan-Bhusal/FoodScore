@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/tokens.dart';
+import '../../providers/auth_provider.dart';
 import '../profile/profile_setup_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
@@ -34,8 +38,8 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _ProfileCard(
-              name: 'Your Profile',
-              subtitle: 'Tap to edit your profile',
+              name: authState.user?.displayName ?? 'Your Profile',
+              subtitle: authState.user?.email ?? 'Tap to edit your profile',
               onEdit: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
@@ -170,7 +174,31 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             OutlinedButton.icon(
-              onPressed: () {},
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Sign Out'),
+                    content: const Text('Are you sure you want to sign out?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          ref.read(authProvider.notifier).signOut();
+                        },
+                        child: Text(
+                          'Sign Out',
+                          style: TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
               icon: const Icon(Icons.logout),
               label: const Text('Log Out'),
               style: OutlinedButton.styleFrom(

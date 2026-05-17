@@ -11,6 +11,7 @@ from app.schemas.auth import (
     TokenResponse,
     RefreshTokenRequest,
     UserOut,
+    UserUpdate,
     RegisterRequest,
     LoginRequest,
 )
@@ -80,9 +81,25 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if update.display_name is not None:
+        current_user.display_name = update.display_name
+    if update.avatar_url is not None:
+        current_user.avatar_url = update.avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 def _token_response(user: User) -> TokenResponse:
     user_id_str = str(user.user_id)
     return TokenResponse(
         access_token=auth_service.create_access_token(user_id_str),
         refresh_token=auth_service.create_refresh_token(user_id_str),
+        user=UserOut.model_validate(user),
     )

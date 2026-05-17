@@ -12,6 +12,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int = 3600
+    user: UserOut
 
 
 class RefreshTokenRequest(BaseModel):
@@ -28,6 +29,11 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
