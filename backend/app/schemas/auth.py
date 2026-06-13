@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr
+import uuid
+
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -29,6 +31,13 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator("user_id", mode="before")
+    @classmethod
+    def validate_user_id(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
 
 
 class UserUpdate(BaseModel):
