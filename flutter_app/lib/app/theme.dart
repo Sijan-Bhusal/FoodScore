@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'tokens.dart';
 
 class AppTheme {
   static ThemeData light() {
+    const publicSans = 'Public Sans';
+    const poppins = 'Poppins';
+
     final colorScheme = const ColorScheme.light(
       primary: AppColors.primary,
       onPrimary: AppColors.onPrimary,
@@ -22,25 +24,17 @@ class AppTheme {
       outlineVariant: AppColors.outlineVariant,
     );
 
-    final baseTextTheme = GoogleFonts.publicSansTextTheme(
-      ThemeData.light().textTheme,
+    final baseTextTheme = ThemeData.light().textTheme.apply(
+      fontFamily: publicSans,
     );
 
     final textTheme = baseTextTheme.copyWith(
-      displayLarge: GoogleFonts.poppins(textStyle: baseTextTheme.displayLarge),
-      displayMedium: GoogleFonts.poppins(
-        textStyle: baseTextTheme.displayMedium,
-      ),
-      displaySmall: GoogleFonts.poppins(textStyle: baseTextTheme.displaySmall),
-      headlineLarge: GoogleFonts.poppins(
-        textStyle: baseTextTheme.headlineLarge,
-      ),
-      headlineMedium: GoogleFonts.poppins(
-        textStyle: baseTextTheme.headlineMedium,
-      ),
-      headlineSmall: GoogleFonts.poppins(
-        textStyle: baseTextTheme.headlineSmall,
-      ),
+      displayLarge: baseTextTheme.displayLarge?.copyWith(fontFamily: poppins),
+      displayMedium: baseTextTheme.displayMedium?.copyWith(fontFamily: poppins),
+      displaySmall: baseTextTheme.displaySmall?.copyWith(fontFamily: poppins),
+      headlineLarge: baseTextTheme.headlineLarge?.copyWith(fontFamily: poppins),
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(fontFamily: poppins),
+      headlineSmall: baseTextTheme.headlineSmall?.copyWith(fontFamily: poppins),
     );
 
     return ThemeData(

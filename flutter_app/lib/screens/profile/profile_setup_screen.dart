@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/tokens.dart';
+import '../../providers/auth_provider.dart';
 
-class ProfileSetupScreen extends StatefulWidget {
+class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
 
   @override
-  State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
+  ConsumerState<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
 }
 
-class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
+class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
@@ -19,6 +21,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _allergiesController = TextEditingController();
   String _bloodType = 'O+';
   bool _loading = true;
+  bool _saving = false;
 
   static const _kName = 'profile_name';
   static const _kAge = 'profile_age';
@@ -56,9 +59,51 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       _bloodType = prefs.getString(_kBlood) ?? _bloodType;
       _allergiesController.text = prefs.getString(_kAllergies) ?? '';
     } catch (_) {
-      // ignore
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _saving = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kName, _nameController.text);
+      await prefs.setInt(_kAge, int.tryParse(_ageController.text) ?? 0);
+      await prefs.setDouble(_kWeight, double.tryParse(_weightController.text) ?? 0.0);
+      await prefs.setDouble(_kHeight, double.tryParse(_heightController.text) ?? 0.0);
+      await prefs.setString(_kBlood, _bloodType);
+      await prefs.setString(_kAllergies, _allergiesController.text);
+
+      final authState = ref.read(authProvider);
+      if (authState.status == AuthStatus.authenticated && authState.user != null) {
+        try {
+          final apiClient = ref.read(apiClientProvider);
+          final token = await apiClient.accessToken;
+          if (token != null) {
+            final dataSource = ref.read(authDataSourceProvider);
+            await dataSource.updateProfile(
+              token,
+              displayName: _nameController.text.trim(),
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile saved.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Save failed.')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -106,7 +151,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           const Spacer(),
                           Text(
                             'Set Up Profile',
-                            style: Theme.of(context).textTheme.titleLarge
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const Spacer(),
@@ -134,7 +181,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                             children: [
                               Text(
                                 'Tell us about you',
-                                style: Theme.of(context).textTheme.titleMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                               const SizedBox(height: 12),
@@ -213,60 +262,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                               ),
                               const SizedBox(height: 20),
                               FilledButton(
-                                onPressed: () async {
-                                  if (!(_formKey.currentState?.validate() ??
-                                      false)) {
-                                    return;
-                                  }
-                                  try {
-                                    final messenger = ScaffoldMessenger.of(
-                                      context,
-                                    );
-                                    final prefs =
-                                        await SharedPreferences.getInstance();
-                                    await prefs.setString(
-                                      _kName,
-                                      _nameController.text,
-                                    );
-                                    await prefs.setInt(
-                                      _kAge,
-                                      int.tryParse(_ageController.text) ?? 0,
-                                    );
-                                    await prefs.setDouble(
-                                      _kWeight,
-                                      double.tryParse(_weightController.text) ??
-                                          0.0,
-                                    );
-                                    await prefs.setDouble(
-                                      _kHeight,
-                                      double.tryParse(_heightController.text) ??
-                                          0.0,
-                                    );
-                                    await prefs.setString(_kBlood, _bloodType);
-                                    await prefs.setString(
-                                      _kAllergies,
-                                      _allergiesController.text,
-                                    );
-                                    if (!mounted) return;
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Profile saved.'),
-                                      ),
-                                    );
-                                  } catch (_) {
-                                    if (!mounted) return;
-                                    // ignore: use_build_context_synchronously
-                                    final messenger = ScaffoldMessenger.of(
-                                      context,
-                                    );
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Save failed.'),
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: const Text('Save Profile'),
+                                onPressed: _saving ? null : _save,
+                                child: _saving
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Save Profile'),
                               ),
                             ],
                           ),

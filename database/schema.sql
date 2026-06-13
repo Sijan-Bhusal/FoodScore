@@ -113,3 +113,14 @@ INSERT INTO additive_reference (e_number, common_name, risk_tier, is_banned) VAL
 ('E954', 'Saccharin', 'medium', false),
 ('E955', 'Sucralose', 'low', false)
 ON CONFLICT (e_number) DO NOTHING;
+
+-- Extend users table for auth (applied after CREATE TABLE IF NOT EXISTS)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(200);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+CREATE INDEX IF NOT EXISTS idx_users_apple_id ON users(apple_id);
