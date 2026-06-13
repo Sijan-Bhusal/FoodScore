@@ -51,10 +51,13 @@ def startup():
     if SCHEMA_FILE.exists():
         schema_sql = SCHEMA_FILE.read_text(encoding="utf-8")
         # Use raw connection to execute multi-statement SQL (handles $$ functions)
-        with engine.raw_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(schema_sql)
+        conn = engine.raw_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(schema_sql)
             conn.commit()
+        finally:
+            conn.close()
 
 
 app.include_router(auth.router)
