@@ -4,8 +4,7 @@ from app.database import get_db
 from app.schemas.product import ProductCreate
 from app.services import product_service, score_service
 from app.services.openfoodfacts import scan_barcode
-from app.services.recommendations_service import get_recommendations, get_better_alternatives
-
+from app.services.recommendations_service import get_recommendations
 router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.post("/")
