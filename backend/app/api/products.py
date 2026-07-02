@@ -5,7 +5,6 @@ from app.schemas.product import ProductCreate
 from app.services import product_service, score_service
 from app.services.openfoodfacts import scan_barcode
 from app.services.recommendations_service import get_recommendations, get_better_alternatives
-
 router = APIRouter(prefix="/products", tags=["Products"])
 
 @router.post("/")
@@ -32,35 +31,19 @@ def list_products(
 def get_recommendations_endpoint(limit: int = 5, db: Session = Depends(get_db)):
     return get_recommendations(None, limit, db)
 
-# Wildcard route must be LAST
-@router.get("/{product_id}")
-def get_product(product_id: str, db: Session = Depends(get_db)):
-    row = product_service.get_product(product_id, db)
-    if not row:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return {
-        "product_id": row[0], "name": row[1], "brand": row[2],
-        "category": row[3], "image_url": row[4],
-        "health_score": row[5], "is_harmful": row[6],
-        "nova_group": row[7], "nutri_score": row[8], "nutriments": row[9],
-        "additives": row[10], "suggestion": row[11],
-        "flagged_ingredients": row[12],
-        "traffic_light": score_service.get_traffic_light(row[5] or 0, row[6] or False)
-    }
-
 @router.get("/scan/{barcode}")
 async def scan_barcode_endpoint(barcode: str, db: Session = Depends(get_db)):
     """Scan a product by barcode - checks local DB first, then OpenFoodFacts"""
     from app.services.openfoodfacts import scan_barcode
-    
+
     try:
         result = await scan_barcode(barcode, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error scanning barcode: {str(e)}")
-    
+
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
-    
+
     product_id = result.get("product_id")
     if not product_id:
         return result
@@ -71,6 +54,26 @@ async def scan_barcode_endpoint(barcode: str, db: Session = Depends(get_db)):
 
     return {
         "source": result.get("source"),
+        "product_id": row[0], "name": row[1], "brand": row[2],
+        "category": row[3], "image_url": row[4],
+        "health_score": row[5], "is_harmful": row[6],
+        "nova_group": row[7], "nutri_score": row[8], "nutriments": row[9],
+        "additives": row[10], "suggestion": row[11],
+        "flagged_ingredients": row[12],
+        "traffic_light": score_service.get_traffic_light(row[5] or 0, row[6] or False)
+    }
+
+@router.get("/{product_id}/alternatives")
+def get_alternatives_endpoint(product_id: str, db: Session = Depends(get_db)):
+    return get_better_alternatives(product_id, db)
+
+# Wildcard route must be LAST
+@router.get("/{product_id}")
+def get_product(product_id: str, db: Session = Depends(get_db)):
+    row = product_service.get_product(product_id, db)
+    if not row:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {
         "product_id": row[0], "name": row[1], "brand": row[2],
         "category": row[3], "image_url": row[4],
         "health_score": row[5], "is_harmful": row[6],

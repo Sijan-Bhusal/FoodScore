@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Dict, Any, Optional
+from app.ml.recommender import find_similar_healthier
 
 def get_recommendations(user_id: Optional[str] = None, limit: int = 5, db: Session = None) -> List[Dict[str, Any]]:
     """Get product recommendations"""
@@ -32,40 +33,12 @@ def get_recommendations(user_id: Optional[str] = None, limit: int = 5, db: Sessi
     ]
 
 def get_better_alternatives(product_id: str, db: Session) -> List[Dict[str, Any]]:
-    """Find better alternatives for a product"""
-    if db is None:
-        return []
-    
+    """Find nutritionally similar but healthier alternatives using KNN"""
     try:
-        # Get current product score
-        current = db.execute(text("""
-            SELECT health_score FROM products WHERE product_id = :pid
-        """), {"pid": product_id}).fetchone()
-        
-        if not current:
-            return []
-        
-        current_score = current[0] if current[0] else 0
-        
-        rows = db.execute(text("""
-            SELECT product_id, name, brand, health_score
-            FROM products
-            WHERE health_score > :score AND health_score IS NOT NULL
-            ORDER BY health_score DESC
-            LIMIT 3
-        """), {"score": current_score, "pid": product_id}).fetchall()
-        
+        results = find_similar_healthier(product_id, db, top_n=3)
+        for r in results:
+            r["improvement"] = f"{r['health_score']} health score"
+        return results
     except Exception as e:
-        print(f"Error getting alternatives: {e}")
+        print(f"Error getting ML alternatives: {e}")
         return []
-    
-    return [
-        {
-            "product_id": r[0],
-            "name": r[1],
-            "brand": r[2],
-            "health_score": r[3],
-            "improvement": f"{r[3] - current_score} points higher"
-        }
-        for r in rows
-    ]

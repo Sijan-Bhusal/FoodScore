@@ -3,6 +3,7 @@ from typing import Optional
 
 class ProductCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    barcode: Optional[str] = Field(None, max_length=50)
     brand: Optional[str] = Field(None, max_length=100)
     category: Optional[str] = Field(None, max_length=50)
     ingredients_raw: Optional[str] = None

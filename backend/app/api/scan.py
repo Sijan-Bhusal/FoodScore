@@ -62,5 +62,5 @@ def get_history(limit: int = 20, authorization: str = Header(None), db: Session 
 
 @router.get("/recent")
 def get_recent_scans(limit: int = 10, db: Session = Depends(get_db)):
-    scans = scan_history_service.get_recent_scans(limit, db)
+    scans = scan_history_service.get_recent_scans(db, limit)
     return {"scans": scans}

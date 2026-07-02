@@ -1,5 +1,4 @@
 import uuid
-
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
@@ -7,18 +6,6 @@ from datetime import datetime
 
 class GoogleAuthRequest(BaseModel):
     id_token: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int = 3600
-    user: UserOut
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
 
 
 class UserOut(BaseModel):
@@ -38,6 +25,18 @@ class UserOut(BaseModel):
         if isinstance(v, uuid.UUID):
             return str(v)
         return v
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = 3600
+    user: UserOut
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class UserUpdate(BaseModel):

@@ -8,7 +8,7 @@ class Product(Base):
     __tablename__ = "products"
     
     product_id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-    barcode = Column(String(50), unique=True, nullable=False, index=True)
+    barcode = Column(String(50), unique=True, nullable=True, index=True)
     name = Column(String, nullable=False)
     brand = Column(String)
     category = Column(String)

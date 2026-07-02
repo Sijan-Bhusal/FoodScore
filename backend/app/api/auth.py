@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import GOOGLE_CLIENT_ID
 from app.database import get_db
 from app.models.user import User
+from app.rate_limiter import auth_limiter
 from app.schemas.auth import (
     GoogleAuthRequest,
     TokenResponse,
@@ -34,13 +35,14 @@ def auth_google(req: GoogleAuthRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid Google ID token: {e}",
         )
-
     user = auth_service.authenticate_or_create_google_user(db, info)
     return _token_response(user)
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    if not auth_limiter.check(request.client.host):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
     try:
         user = auth_service.register_user(db, req.username, req.email, req.password)
     except ValueError as e:
@@ -49,7 +51,9 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    if not auth_limiter.check(request.client.host):
+        raise HTTPException(status_code=429, detail="Too many requests, slow down")
     user = auth_service.authenticate_email_password(db, req.email, req.password)
     if user is None:
         raise HTTPException(
