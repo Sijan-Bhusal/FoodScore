@@ -92,8 +92,10 @@ def compute_score(product_id: str, db: Session) -> dict:
     score += nova_mod.get(nova_group, 0)
 
     # Nutri-Score modifier — use ML prediction if not available
+    ml_predicted_nutriscore = None
     if not nutri_score and nutriments:
-        nutri_score = predict_nutriscore(nutriments)
+       nutri_score = predict_nutriscore(nutriments)
+    ml_predicted_nutriscore = nutri_score
 
     nutri_mod = {"A": 5, "B": 3, "C": 0, "D": -5, "E": -10}
     score += nutri_mod.get(nutri_score, 0)
@@ -102,11 +104,19 @@ def compute_score(product_id: str, db: Session) -> dict:
     score = max(0, min(100, score))
 
     # Save score to DB
-    db.execute(text("""
-        UPDATE products
-        SET health_score = :score, is_harmful = :harmful, updated_at = NOW()
-        WHERE product_id = :pid
-    """), {"score": score, "harmful": is_harmful, "pid": product_id})
+    if ml_predicted_nutriscore:
+        db.execute(text("""
+            UPDATE products
+            SET health_score = :score, is_harmful = :harmful, 
+                nutri_score = :nutri, updated_at = NOW()
+            WHERE product_id = :pid
+        """), {"score": score, "harmful": is_harmful, "nutri": ml_predicted_nutriscore, "pid": product_id})
+    else:
+        db.execute(text("""
+            UPDATE products
+            SET health_score = :score, is_harmful = :harmful, updated_at = NOW()
+            WHERE product_id = :pid
+        """), {"score": score, "harmful": is_harmful, "pid": product_id})
 
     # Save flagged ingredients
     db.execute(text("DELETE FROM flagged_ingredients WHERE product_id = :pid"), {"pid": product_id})
